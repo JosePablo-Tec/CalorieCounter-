@@ -1,5 +1,5 @@
 {
-  "name": "Contador de Calorías Inteligente",
-  "description": "Una aplicación para registrar tu ingesta de calorías, establecer metas y recibir consejos de pérdida de peso personalizados por IA para optimizar tu nutrición.",
+  "name": "Contador de Calorías",
+  "description": "Una aplicación para registrar tu ingesta de calorías.",
   "requestFramePermissions": []
 }

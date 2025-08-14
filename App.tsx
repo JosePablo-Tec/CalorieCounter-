@@ -1,10 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FoodItem, MealType } from './types';
 import CalorieDisplay from './components/CalorieDisplay';
 import FoodList from './components/FoodList';
 import FoodForm from './components/FoodForm';
-import GeminiAdvisor from './components/GeminiAdvisor';
-import { getWeightLossTips } from './services/geminiService';
 import { HeaderIcon } from './components/icons';
 
 const App: React.FC = () => {
@@ -12,10 +10,6 @@ const App: React.FC = () => {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [newGoal, setNewGoal] = useState(dailyGoal.toString());
-
-  const [aiAdvice, setAiAdvice] = useState<string>('');
-  const [isLoadingAiAdvice, setIsLoadingAiAdvice] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
 
   const totalCalories = useMemo(() => {
     return foodItems.reduce((sum, item) => sum + item.calories, 0);
@@ -48,26 +42,12 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchAdvice = useCallback(async () => {
-    setIsLoadingAiAdvice(true);
-    setError('');
-    setAiAdvice('');
-    try {
-      const advice = await getWeightLossTips(dailyGoal, totalCalories, foodItems);
-      setAiAdvice(advice);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Un error desconocido ocurrió al obtener consejos.');
-    } finally {
-      setIsLoadingAiAdvice(false);
-    }
-  }, [dailyGoal, totalCalories, foodItems]);
-
   return (
     <div className="min-h-screen bg-slate-50 text-dark font-sans">
       <header className="bg-primary shadow-md">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-center">
           <HeaderIcon />
-          <h1 className="text-2xl sm:text-3xl font-bold text-white ml-3">Contador de Calorías Inteligente</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white ml-3">Contador de Calorías</h1>
         </div>
       </header>
 
@@ -110,13 +90,6 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
-
-            <GeminiAdvisor
-                onGetAdvice={fetchAdvice}
-                advice={aiAdvice}
-                isLoading={isLoadingAiAdvice}
-                error={error}
-            />
           </div>
 
           <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
