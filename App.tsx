@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FoodItem, MealType, User } from './types';
 import CalorieDisplay from './components/CalorieDisplay';
 import FoodList from './components/FoodList';
@@ -7,17 +7,33 @@ import { HeaderIcon } from './components/icons';
 import Auth from './components/Auth';
 import TemplateManager from './components/TemplateManager';
 import HistoryView from './components/HistoryView';
+import { supabase } from './services/supabaseService';
+import { Session } from '@supabase/supabase-js';
 
 type View = 'dashboard' | 'templates' | 'history';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   
   const [dailyGoal, setDailyGoal] = useState<number>(2000);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [newGoal, setNewGoal] = useState(dailyGoal.toString());
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const totalCalories = useMemo(() => {
     return foodItems.reduce((sum, item) => sum + item.calories, 0);
@@ -61,19 +77,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (email: string) => {
-    setUser({ email, name: email.split('@')[0] });
-  };
-
-  const handleLogout = () => {
-    setUser(null);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setFoodItems([]);
     setCurrentView('dashboard');
   };
 
-  if (!user) {
-    return <Auth onLogin={handleLogin} />;
+  if (!session) {
+    return <Auth onLogin={() => {}} />;
   }
+
+  const user = session.user;
+  const userName = user.email?.split('@')[0] || 'User';
 
   return (
     <div className="min-h-screen bg-slate-50 text-dark font-sans flex flex-col">
@@ -84,7 +99,7 @@ const App: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-bold text-white ml-3 hidden sm:block">Contador Inteligente</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-white text-sm font-medium">Hola, {user.name}</span>
+            <span className="text-white text-sm font-medium">Hola, {userName}</span>
             <button onClick={handleLogout} className="text-white/80 hover:text-white text-sm underline">Salir</button>
           </div>
         </div>
@@ -100,7 +115,7 @@ const App: React.FC = () => {
                 onClick={() => setCurrentView('templates')}
                 className={`pb-3 px-2 font-medium transition-colors border-b-4 ${currentView === 'templates' ? 'border-accent text-white' : 'border-transparent text-white/60 hover:text-white'}`}
             >
-                Plantillas & IA
+                Plantillas de Comidas
             </button>
             <button 
                 onClick={() => setCurrentView('history')}

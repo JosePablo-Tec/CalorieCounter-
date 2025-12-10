@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../services/supabaseService';
 
 interface AuthProps {
   onLogin: (email: string) => void;
@@ -10,11 +11,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  // Credenciales hardcodeadas para pruebas
-  const TEST_USER = "test@example.com";
-  const TEST_PASSWORD = "password123";
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -24,17 +21,21 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
 
     if (isLogin) {
-      // Validación estricta para el usuario de prueba
-      if (email === TEST_USER && password === TEST_PASSWORD) {
-        onLogin(email);
-      } else if (email !== TEST_USER) {
-         setError('Usuario no encontrado. Prueba con las credenciales de test.');
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
       } else {
-         setError('Contraseña incorrecta.');
+        onLogin(email);
       }
     } else {
-      // En modo registro, permitimos el acceso directo (simulación)
-      onLogin(email);
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setError(error.message);
+      } else {
+        // For simplicity, we'll log the user in directly after signup.
+        // In a real app, you might want to send a confirmation email.
+        onLogin(email);
+      }
     }
   };
 
@@ -87,18 +88,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </form>
 
         <div className="mt-6 text-center">
-           {isLogin && (
-            <div className="mb-6 text-xs text-gray-500 bg-gray-100 p-3 rounded-lg border border-gray-200">
-                <p className="font-semibold mb-1">Credenciales de prueba:</p>
-                <div className="grid grid-cols-2 gap-2 text-left w-fit mx-auto">
-                    <span className="text-right text-gray-400">Usuario:</span>
-                    <span className="font-mono text-dark">{TEST_USER}</span>
-                    <span className="text-right text-gray-400">Clave:</span>
-                    <span className="font-mono text-dark">{TEST_PASSWORD}</span>
-                </div>
-            </div>
-           )}
-
           <button
             onClick={() => {
                 setIsLogin(!isLogin);
