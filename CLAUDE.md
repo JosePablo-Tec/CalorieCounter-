@@ -32,7 +32,7 @@ React 19 + TypeScript SPA built with Vite. UI is entirely in Spanish.
 **Persistence pattern:**
 - **Food items** are persisted with *granular* ops: `addFoodItem` / `addMultipleFoodItems` / `deleteFoodItem` each call a single-row `insertFoodItem` / `insertFoodItems` / `deleteFoodItemById` on Supabase. There is no effect that resaves all items on every state change.
 - **Goal** and **templates** are still saved via a `useEffect` that watches state. Both effects early-return unless `hydratedRef.current` is true — this flag starts `false` and is set `true` by a trailing effect on the first render after `appStatus` becomes `'ready'`. That guard is what prevents the hydration render from triggering a full rewrite of the data we just loaded. `checkStatus` / `handleNameSaved` reset the flag to `false` before publishing fresh state.
-- **History** is not stored in its own table — `loadHistory(currentGoal)` calls the `get_history_totals(cutoff_date)` Supabase RPC, which aggregates `food_items` into `(date, total_calories)` rows server-side (≤90 days). A third effect keeps today's in-memory history entry in sync with `foodItems`; it does not write to the DB.
+- **History** is not stored in its own table — `loadHistory(currentGoal)` calls the `get_history_totals(cutoff_date)` Supabase RPC, which aggregates `food_items` into `(date, total_calories)` rows server-side (≤90 days). `DailyHistory.items` is always `[]` for these rows. A third effect keeps today's in-memory history entry in sync with `foodItems` (overwriting just that entry, including its `items`); it does not write to the DB.
 
 **`services/dataService.ts`** — all persistence and auth functions. Fully backed by Supabase (not localStorage). `saveTemplates` does a `DELETE` + two batched `INSERT`s (one for templates, one for all items); it relies on the `template_items.template_id` CASCADE to clean up children. `loadProfile()` returns `{ name, dailyGoal }` in a single round-trip (replaces the old separate `loadUserName` / `loadGoal`). `saveGoal` / `saveUserName` both upsert `user_profiles`. The module caches `uid` at module scope and resolves it via `supabase.auth.getSession()` (local, no network); the cache is invalidated on `SIGNED_OUT` and in `signOut()`.
 
@@ -40,7 +40,13 @@ React 19 + TypeScript SPA built with Vite. UI is entirely in Spanish.
 
 **`components/Auth.tsx`** — handles email/password sign-in, registration, email verification pending state, resend verification, and post-verification name entry. The `view` prop switches between `'auth'` (full auth flow) and `'name-entry'` (shown after first verified login when no name is set yet).
 
-**`types.ts`** — `FoodItem`, `MealType`, `FoodTemplate`, `DailyHistory`
+**`types.ts`** — `FoodItem`, `MealType` (`'Desayuno' | 'Almuerzo' | 'Cena' | 'Otros'`), `FoodTemplate`, `DailyHistory`
+
+**Navigation** is a `View` state (`'dashboard' | 'templates' | 'history'`) in `App.tsx`; no router is used. The `TemplateManager` view calls `setCurrentView('dashboard')` after applying a template (`addMultipleFoodItems`).
+
+**Day-change detection:** A `setInterval` (60 s) plus a `visibilitychange` listener both call `loadFoodItems` for the new date and update the `today` state. This is the only automatic background fetch after initial load.
+
+**`HistoryView`** renders a plain HTML table (not a chart) and includes a "Exportar CSV" button that triggers a client-side Blob download of the last ≤90 days.
 
 **`utils/uuid.ts`** — thin wrapper around `crypto.randomUUID()`, used whenever a new `FoodItem` or `FoodTemplate` needs a client-side id.
 
@@ -60,8 +66,15 @@ To apply the schema: run `supabase/schema.sql` in the Supabase Dashboard SQL Edi
 
 ## Styling
 
-Tailwind CSS is loaded via CDN in `index.html` (not installed as a package). Custom color palette (`primary`, `secondary`, `accent`, `light`, `dark`) is defined in the inline `tailwind.config` script in `index.html`. The `@` alias in `vite.config.ts` resolves to the project root.
+Tailwind CSS is loaded via CDN in `index.html` (not installed as a package). Custom color palette (`primary`, `secondary`, `accent`, `light`, `dark`) is defined in the inline `tailwind.config` script in `index.html`. The `@` alias in `vite.config.ts` resolves to the project root (`.`), so `@/types` → `types.ts`, `@/services/dataService` → `services/dataService.ts`, etc.
+
+The dev server binds to `0.0.0.0` (network-accessible), not just localhost.
 
 ## Stale artifacts
 
-`index.html` contains an importmap entry for `@google/genai` and `recharts` via `esm.sh`. The Gemini integration (`components/GeminiAdvisor.tsx`, `services/geminiService.ts`) has been deleted; `@google/genai` is no longer used. `recharts` is also unused — `HistoryView` renders a plain HTML table, not a chart.
+The project originated from an AI Studio / Gemini scaffold. Several files are leftovers from that era and can be deleted:
+- `GEMINI.md` — Gemini-era build instructions; superseded by this file.
+- `README.md` — references AI Studio and a `GEMINI_API_KEY`; no longer accurate.
+- `metadata.json` — AI Studio app metadata; unused by Vite.
+- `index.html` importmap entries for `@google/genai` and `recharts` — neither is imported by any live component.
+- `recharts` in `package.json` `dependencies` — `HistoryView` renders a plain HTML table, not a chart; this package should be removed.

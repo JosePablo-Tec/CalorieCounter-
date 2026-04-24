@@ -23,7 +23,10 @@ import {
 type View      = 'dashboard' | 'templates' | 'history';
 type AppStatus = 'loading' | 'signed-out' | 'needs-name' | 'ready';
 
-const getTodayString = (): string => new Date().toISOString().split('T')[0];
+const getTodayString = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const App: React.FC = () => {
   const [today, setToday] = useState(getTodayString);
