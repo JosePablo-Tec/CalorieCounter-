@@ -123,3 +123,39 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_history_totals(DATE) TO authenticated;
+
+-- ============================================================
+-- 7. Purga automática de food_items con más de 90 días
+--    Objetivo: estabilizar el tamaño de la DB (y quedarse bajo los
+--    500 MB del plan gratuito de Supabase) eliminando datos que
+--    ya no son legibles desde la app: loadHistory solo pide 90 días
+--    vía get_history_totals, así que las filas más antiguas no se
+--    leen nunca.
+--
+--    REQUISITO: pg_cron debe estar habilitado
+--    (Dashboard > Database > Extensions > pg_cron).
+--    Idempotente: seguro re-ejecutar.
+-- ============================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+CREATE OR REPLACE FUNCTION public.purge_old_food_items()
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  DELETE FROM public.food_items
+  WHERE date < CURRENT_DATE - INTERVAL '90 days';
+$$;
+
+-- Reemplaza el job si ya existía, para poder re-ejecutar este archivo.
+SELECT cron.unschedule(jobid)
+FROM cron.job
+WHERE jobname = 'purge-old-food-items';
+
+SELECT cron.schedule(
+  'purge-old-food-items',
+  '0 3 * * *',  -- 03:00 UTC todos los días
+  $$SELECT public.purge_old_food_items();$$
+);

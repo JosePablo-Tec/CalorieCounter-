@@ -46,7 +46,9 @@ React 19 + TypeScript SPA built with Vite. UI is entirely in Spanish.
 
 **Day-change detection:** A `setInterval` (60 s) plus a `visibilitychange` listener both call `loadFoodItems` for the new date and update the `today` state. This is the only automatic background fetch after initial load.
 
-**`HistoryView`** renders a plain HTML table (not a chart) and includes a "Exportar CSV" button that triggers a client-side Blob download of the last ≤90 days.
+**Local-timezone "today":** `getTodayString()` in `App.tsx` builds the YYYY-MM-DD string from `getFullYear` / `getMonth` / `getDate` — *not* `toISOString()`. All `food_items.date` reads/writes go through this string, so the app's notion of "today" follows the user's local clock. Don't switch this to ISO/UTC formatting; doing so re-introduces the timezone bug (entries near midnight landing on the wrong day).
+
+**`HistoryView`** renders a plain HTML table (not a chart) and includes a "Exportar CSV" button that triggers a client-side Blob download of the last ≤90 days. It also shows a retention notice; when the oldest record is within 7 days of the 90-day cutoff (i.e., about to be purged server-side), the notice upgrades to an amber warning urging the user to export the CSV. The threshold constants (`RETENTION_DAYS`, `PURGE_WARNING_THRESHOLD_DAYS`) live at the top of the file — keep them in sync with the server-side purge window.
 
 **`utils/uuid.ts`** — thin wrapper around `crypto.randomUUID()`, used whenever a new `FoodItem` or `FoodTemplate` needs a client-side id.
 
@@ -62,7 +64,9 @@ Schema is in `supabase/schema.sql`. Tables (all with RLS, scoped to `auth.uid()`
 
 A trigger (`on_auth_user_created`) inserts an empty `user_profiles` row on new user signup. An RPC `get_history_totals(cutoff_date DATE)` returns per-day calorie totals for the caller (via `auth.uid()`) and is what `loadHistory` calls.
 
-To apply the schema: run `supabase/schema.sql` in the Supabase Dashboard SQL Editor. The file is idempotent-friendly for the RPC section only; table DDL assumes a clean database.
+**Scheduled purge:** A `pg_cron` job (`purge-old-food-items`, daily at 03:00 UTC) calls `purge_old_food_items()`, which deletes any `food_items` row older than 90 days across all users. This keeps the DB size bounded per user so the project can stay within Supabase's free-tier 500 MB limit. The purge is safe because `loadHistory` never reads past 90 days — purged rows are already invisible in the UI. **Requires `pg_cron` enabled** in Dashboard > Database > Extensions. If you change the retention window, update it in three places: this SQL function, `RETENTION_DAYS` in `HistoryView.tsx`, and the `cutoff_date` math in `loadHistory`.
+
+To apply the schema: run `supabase/schema.sql` in the Supabase Dashboard SQL Editor. The file is idempotent-friendly for the RPC and purge sections only; table DDL assumes a clean database.
 
 ## Styling
 

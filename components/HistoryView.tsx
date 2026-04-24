@@ -5,10 +5,28 @@ interface HistoryViewProps {
   history: DailyHistory[];
 }
 
+const RETENTION_DAYS = 90;
+const PURGE_WARNING_THRESHOLD_DAYS = 7;
+
+const daysBetween = (isoDate: string): number => {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const then = new Date(y, m - 1, d).getTime();
+  const now  = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.floor((today - then) / 86_400_000);
+};
+
 const HistoryView: React.FC<HistoryViewProps> = ({ history }) => {
   const records = [...history]
     .filter(d => d.totalCalories > 0)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  const oldestAgeDays = records.length > 0
+    ? daysBetween(records[records.length - 1].date)
+    : 0;
+  const daysUntilPurge = RETENTION_DAYS - oldestAgeDays;
+  const showPurgeWarning =
+    records.length > 0 && daysUntilPurge <= PURGE_WARNING_THRESHOLD_DAYS;
 
   const handleExportCSV = () => {
     const header = 'Fecha,Meta (kcal),Consumo (kcal),Diferencia (kcal)\n';
@@ -51,6 +69,25 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history }) => {
           Exportar CSV
         </button>
       </div>
+
+      {showPurgeWarning ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Tus registros más antiguos se eliminarán pronto.</p>
+          <p className="mt-1">
+            {daysUntilPurge <= 0
+              ? 'El registro más antiguo será eliminado hoy.'
+              : daysUntilPurge === 1
+                ? 'El registro más antiguo será eliminado mañana.'
+                : `El registro más antiguo será eliminado en ${daysUntilPurge} días.`}{' '}
+            Exporta el CSV ahora si deseas conservarlos.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+          El historial almacena los últimos {RETENTION_DAYS} días. Para conservar
+          datos más antiguos, exporta el CSV periódicamente.
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl shadow-lg border border-gray-100 bg-white">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
