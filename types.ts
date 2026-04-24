@@ -21,7 +21,3 @@ export interface DailyHistory {
   items: FoodItem[];
 }
 
-export interface User {
-  email: string;
-  name: string;
-}
