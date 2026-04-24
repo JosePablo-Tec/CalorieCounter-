@@ -32,7 +32,7 @@ React 19 + TypeScript SPA built with Vite. UI is entirely in Spanish.
 **Persistence pattern:**
 - **Food items** are persisted with *granular* ops: `addFoodItem` / `addMultipleFoodItems` / `deleteFoodItem` each call a single-row `insertFoodItem` / `insertFoodItems` / `deleteFoodItemById` on Supabase. There is no effect that resaves all items on every state change.
 - **Goal** and **templates** are still saved via a `useEffect` that watches state. Both effects early-return unless `hydratedRef.current` is true — this flag starts `false` and is set `true` by a trailing effect on the first render after `appStatus` becomes `'ready'`. That guard is what prevents the hydration render from triggering a full rewrite of the data we just loaded. `checkStatus` / `handleNameSaved` reset the flag to `false` before publishing fresh state.
-- **History** is not stored separately — `loadHistory(currentGoal)` aggregates `(date, calories)` rows from `food_items` client-side (≤90 days). A third effect keeps today's in-memory history entry in sync with `foodItems`; it does not write to the DB.
+- **History** is not stored in its own table — `loadHistory(currentGoal)` calls the `get_history_totals(cutoff_date)` Supabase RPC, which aggregates `food_items` into `(date, total_calories)` rows server-side (≤90 days). A third effect keeps today's in-memory history entry in sync with `foodItems`; it does not write to the DB.
 
 **`services/dataService.ts`** — all persistence and auth functions. Fully backed by Supabase (not localStorage). `saveTemplates` does a `DELETE` + two batched `INSERT`s (one for templates, one for all items); it relies on the `template_items.template_id` CASCADE to clean up children. `loadProfile()` returns `{ name, dailyGoal }` in a single round-trip (replaces the old separate `loadUserName` / `loadGoal`). `saveGoal` / `saveUserName` both upsert `user_profiles`. The module caches `uid` at module scope and resolves it via `supabase.auth.getSession()` (local, no network); the cache is invalidated on `SIGNED_OUT` and in `signOut()`.
 
@@ -54,9 +54,9 @@ Schema is in `supabase/schema.sql`. Tables (all with RLS, scoped to `auth.uid()`
 - `food_templates` — `user_id`, `name`, `total_calories`
 - `template_items` — `template_id` (FK to `food_templates` cascade), `name`, `calories`
 
-A trigger (`on_auth_user_created`) inserts an empty `user_profiles` row on new user signup.
+A trigger (`on_auth_user_created`) inserts an empty `user_profiles` row on new user signup. An RPC `get_history_totals(cutoff_date DATE)` returns per-day calorie totals for the caller (via `auth.uid()`) and is what `loadHistory` calls.
 
-To apply the schema: run `supabase/schema.sql` in the Supabase Dashboard SQL Editor.
+To apply the schema: run `supabase/schema.sql` in the Supabase Dashboard SQL Editor. The file is idempotent-friendly for the RPC section only; table DDL assumes a clean database.
 
 ## Styling
 
